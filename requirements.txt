@@ -4,3 +4,4 @@ open_clip_torch
 Pillow
 torch
 python-multipart
+openai
