@@ -1,6 +1,8 @@
 import os
 import io
 import base64
+import json
+import logging
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, File, UploadFile
 from pydantic import BaseModel
@@ -10,14 +12,22 @@ import torch
 import openai
 from dotenv import load_dotenv
 
+# Setup logging
+logging.basicConfig(
+    filename="vector_output.log",
+    level=logging.INFO,
+    format="%(asctime)s | %(levelname)s | %(message)s"
+)
+
+# Load .env
 load_dotenv()
 
 # ENV
 PROVIDER = os.getenv("EMBEDDING_PROVIDER", "openclip")
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "text-embedding-3-small")
-OPENAI_MODEL_IMAGE = os.getenv("OPENAI_MODEL_IMAGE", "gpt-4o-2024-08-06")
+OPENAI_MODEL_IMAGE = os.getenv("OPENAI_MODEL_IMAGE", "gpt-4o")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-PROMPT = os.getenv("PROMPT", "Describe the product in this image as precisely as possible.")
+PROMPT = os.getenv("PROMPT", "Beschreibe präzise und sachlich ausschließlich das sichtbare Produkt auf dem Bild. Konzentriere dich auf Produktname, Farben, Materialien, sichtbare Strukturen, Formen und typische Nutzungshinweise. Wenn Text, Inhaltsstoffe, Logos, Marken oder Nummern wie EAN-Codes sichtbar sind, gib diese vollständig wieder. Vermeide jede Beschreibung von Personen, Körperteilen oder deren Interaktion mit dem Produkt. Nutze klare, maschinell interpretierbare Sprache in vollständigen Sätzen. Beschreibe den Hintergrund nur, wenn er für die Nutzung oder Erkennbarkeit des Produkts relevant ist. Nenne ausschließlich Merkmale, die im Bild eindeutig zu erkennen sind. Verzichte auf Interpretationen oder Bewertungen.")
 PORT = int(os.getenv("PORT", "1337"))
 
 print(f"🔧 Using embedding provider: {PROVIDER}")
@@ -29,7 +39,7 @@ tokenizer = None
 if PROVIDER == "openclip":
     import open_clip
     MODEL_NAME = os.getenv("MODEL_NAME", "ViT-L-14")
-    PRETRAINED = os.getenv("PRETRAINED", "laion2b_s32b_b82k")
+    PRETRAINED = os.getenv("PRETRAINED")
 
     model, _, preprocess = open_clip.create_model_and_transforms(MODEL_NAME, pretrained=PRETRAINED)
     tokenizer = open_clip.get_tokenizer(MODEL_NAME)
@@ -43,7 +53,6 @@ elif PROVIDER == "openai":
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Lifespan startup logic
     if PROVIDER == "openai":
         try:
             test_embed = openai.embeddings.create(input=["Hello"], model=OPENAI_MODEL)
@@ -62,7 +71,6 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             print(f"❌ Failed to reach OpenAI image/chat model '{OPENAI_MODEL_IMAGE}': {e}")
     yield
-    # Lifespan shutdown logic (optional)
 
 
 app = FastAPI(title="Embedding Service", lifespan=lifespan)
@@ -79,7 +87,9 @@ async def text_embedding(payload: Texts):
         with torch.no_grad():
             emb = model.encode_text(tokens)
             emb = emb / emb.norm(dim=-1, keepdim=True)
-        return {"vectors": emb.cpu().tolist()}
+        vectors = emb.cpu().tolist()
+        logging.info(f"TextEmbedding | Provider=openclip | VectorLength={len(vectors[0])} | Vectors={json.dumps(vectors)}")
+        return {"vectors": vectors}
 
     elif PROVIDER == "openai":
         response = openai.embeddings.create(
@@ -87,6 +97,7 @@ async def text_embedding(payload: Texts):
             model=OPENAI_MODEL
         )
         vectors = [d.embedding for d in response.data]
+        logging.info(f"TextEmbedding | Provider=openai | VectorLength={len(vectors[0])} | Vectors={json.dumps(vectors)}")
         return {"vectors": vectors}
 
     return {"error": "Invalid EMBEDDING_PROVIDER setting"}
@@ -102,7 +113,9 @@ async def image_embedding(file: UploadFile = File(...)):
         with torch.no_grad():
             emb = model.encode_image(img_t)
             emb = emb / emb.norm(dim=-1, keepdim=True)
-        return {"vector": emb.cpu().tolist()[0]}
+        vector = emb.cpu().tolist()[0]
+        logging.info(f"ImageEmbedding | Provider=openclip | VectorLength={len(vector)} | Vector={json.dumps(vector)}")
+        return {"vector": vector}
 
     elif PROVIDER == "openai":
         base64_img = base64.b64encode(data).decode("utf-8")
@@ -120,18 +133,18 @@ async def image_embedding(file: UploadFile = File(...)):
                 ],
                 max_tokens=300
             )
-            print("🔍 OpenAI Chat Completion Response:")
-            print(response)
             description = response.choices[0].message.content.strip()
 
             embed_response = openai.embeddings.create(
                 input=[description],
                 model=OPENAI_MODEL
             )
+            vector = embed_response.data[0].embedding
+            logging.info(f"ImageEmbedding | Provider=openai | Description=\"{description}\" | VectorLength={len(vector)} | Vector={json.dumps(vector)}")
 
             return {
                 "description": description,
-                "vector": embed_response.data[0].embedding
+                "vector": vector
             }
 
         except Exception as e:
