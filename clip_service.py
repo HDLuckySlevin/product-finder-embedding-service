@@ -44,8 +44,9 @@ tokenizer = None
 if PROVIDER == "openclip":
     import open_clip
     pretrained_weights = PRETRAINED
-    if (MODEL_NAME or "ViT-L-14") == "ViT-L-14" and not pretrained_weights:
-        pretrained_weights = "openai"
+    if (MODEL_NAME or "ViT-L-14") == "ViT-L-14":
+        if not pretrained_weights:
+            pretrained_weights = "openai"
         logging.info(
             f"Loading ViT-L-14 with pretrained weights '{pretrained_weights}'"
         )
@@ -131,8 +132,9 @@ async def changeembeddingmodell(payload: ChangeModel):
         os.environ["MODEL_NAME"] = model_name
         import open_clip
         pretrained_weights = PRETRAINED
-        if MODEL_NAME == "ViT-L-14" and not pretrained_weights:
-            pretrained_weights = "openai"
+        if MODEL_NAME == "ViT-L-14":
+            if not pretrained_weights:
+                pretrained_weights = "openai"
             logging.info(
                 f"Loading ViT-L-14 with pretrained weights '{pretrained_weights}'"
             )
