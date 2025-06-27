@@ -13,3 +13,8 @@ product-finder-embedding-service is a lightweight Python API using FastAPI and O
 }
 ```
 
+### Debugging
+
+Set `DEBUG_VECTORS=true` in your `.env` if you want the service to log full
+vectors in `debug.log`. Otherwise only vector lengths are logged.
+

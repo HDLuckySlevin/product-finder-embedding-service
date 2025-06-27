@@ -29,6 +29,7 @@ OPENAI_MODEL_IMAGE = os.getenv("OPENAI_MODEL_IMAGE", "gpt-4o")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 MODEL_NAME = os.getenv("MODEL_NAME", "ViT-L-14")  # ensure defined for all providers
 PRETRAINED = os.getenv("PRETRAINED")
+DEBUG_VECTORS = os.getenv("DEBUG_VECTORS", "false").lower() == "true"
 PROMPT = os.getenv("PROMPT", "Beschreibe präzise und sachlich ausschließlich das sichtbare Produkt auf dem Bild. Konzentriere dich auf Produktname, Farben, Materialien, sichtbare Strukturen, Formen und typische Nutzungshinweise. Wenn Text, Inhaltsstoffe, Logos, Marken oder Nummern wie EAN-Codes sichtbar sind, gib diese vollständig wieder. Vermeide jede Beschreibung von Personen, Körperteilen oder deren Interaktion mit dem Produkt. Nutze klare, maschinell interpretierbare Sprache in vollständigen Sätzen. Beschreibe den Hintergrund nur, wenn er für die Nutzung oder Erkennbarkeit des Produkts relevant ist. Nenne ausschließlich Merkmale, die im Bild eindeutig zu erkennen sind. Verzichte auf Interpretationen oder Bewertungen. Schreibe Am ende die Produkt-Kategorie dazu und den Produkt-Namen. Antworte auf deutsch")
 PORT = int(os.getenv("PORT", "1337"))
 DIMENSION_OPENCLIP = int(os.getenv("DIMENSION_OPENCLIP"))
@@ -156,7 +157,14 @@ async def text_embedding(payload: Texts):
             emb = model.encode_text(tokens)
             emb = emb / emb.norm(dim=-1, keepdim=True)
         vectors = emb.cpu().tolist()
-        logging.info(f"TextEmbedding | Provider=openclip | VectorLength={len(vectors[0])} | Vectors={json.dumps(vectors)}")
+        if DEBUG_VECTORS:
+            logging.info(
+                f"TextEmbedding | Provider=openclip | VectorLength={len(vectors[0])} | Vectors={json.dumps(vectors)}"
+            )
+        else:
+            logging.info(
+                f"TextEmbedding | Provider=openclip | VectorLength={len(vectors[0])}"
+            )
         result = {"vectors": vectors}
         logging.info(f"/text-embedding | result={json.dumps(result)}")
         return result
@@ -167,7 +175,14 @@ async def text_embedding(payload: Texts):
             model=OPENAI_MODEL
         )
         vectors = [d.embedding for d in response.data]
-        logging.info(f"TextEmbedding | Provider=openai | VectorLength={len(vectors[0])} | Vectors={json.dumps(vectors)}")
+        if DEBUG_VECTORS:
+            logging.info(
+                f"TextEmbedding | Provider=openai | VectorLength={len(vectors[0])} | Vectors={json.dumps(vectors)}"
+            )
+        else:
+            logging.info(
+                f"TextEmbedding | Provider=openai | VectorLength={len(vectors[0])}"
+            )
         result = {"vectors": vectors}
         logging.info(f"/text-embedding | result={json.dumps(result)}")
         return result
@@ -189,7 +204,14 @@ async def image_embedding(file: UploadFile = File(...)):
             emb = model.encode_image(img_t)
             emb = emb / emb.norm(dim=-1, keepdim=True)
         vector = emb.cpu().tolist()[0]
-        logging.info(f"ImageEmbedding | Provider=openclip | VectorLength={len(vector)} | Vector={json.dumps(vector)}")
+        if DEBUG_VECTORS:
+            logging.info(
+                f"ImageEmbedding | Provider=openclip | VectorLength={len(vector)} | Vector={json.dumps(vector)}"
+            )
+        else:
+            logging.info(
+                f"ImageEmbedding | Provider=openclip | VectorLength={len(vector)}"
+            )
         result = {
             "description": "test",
             "vector": vector,
@@ -221,7 +243,14 @@ async def image_embedding(file: UploadFile = File(...)):
                 model=OPENAI_MODEL
             )
             vector = embed_response.data[0].embedding
-            logging.info(f"ImageEmbedding | Provider=openai | Description=\"{description}\" | VectorLength={len(vector)} | Vector={json.dumps(vector)}")
+            if DEBUG_VECTORS:
+                logging.info(
+                    f"ImageEmbedding | Provider=openai | Description=\"{description}\" | VectorLength={len(vector)} | Vector={json.dumps(vector)}"
+                )
+            else:
+                logging.info(
+                    f"ImageEmbedding | Provider=openai | Description=\"{description}\" | VectorLength={len(vector)}"
+                )
 
             result = {
                 "description": description,
