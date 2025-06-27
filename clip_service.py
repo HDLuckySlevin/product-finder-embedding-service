@@ -43,7 +43,16 @@ tokenizer = None
 
 if PROVIDER == "openclip":
     import open_clip
-    model, _, preprocess = open_clip.create_model_and_transforms(MODEL_NAME or "ViT-L-14", pretrained=PRETRAINED)
+    pretrained_weights = PRETRAINED
+    if (MODEL_NAME or "ViT-L-14") == "ViT-L-14":
+        if not pretrained_weights:
+            pretrained_weights = "openai"
+        logging.info(
+            f"Loading ViT-L-14 with pretrained weights '{pretrained_weights}'"
+        )
+    model, _, preprocess = open_clip.create_model_and_transforms(
+        MODEL_NAME or "ViT-L-14", pretrained=pretrained_weights
+    )
     tokenizer = open_clip.get_tokenizer(MODEL_NAME or "ViT-L-14")
     model.eval()
 
@@ -122,7 +131,16 @@ async def changeembeddingmodell(payload: ChangeModel):
         os.environ["EMBEDDING_PROVIDER"] = "openclip"
         os.environ["MODEL_NAME"] = model_name
         import open_clip
-        model, _, preprocess = open_clip.create_model_and_transforms(MODEL_NAME, pretrained=PRETRAINED)
+        pretrained_weights = PRETRAINED
+        if MODEL_NAME == "ViT-L-14":
+            if not pretrained_weights:
+                pretrained_weights = "openai"
+            logging.info(
+                f"Loading ViT-L-14 with pretrained weights '{pretrained_weights}'"
+            )
+        model, _, preprocess = open_clip.create_model_and_transforms(
+            MODEL_NAME, pretrained=pretrained_weights
+        )
         tokenizer = open_clip.get_tokenizer(MODEL_NAME)
         model.eval()
         result = {"embedding_provider": PROVIDER, "model_name": MODEL_NAME}
