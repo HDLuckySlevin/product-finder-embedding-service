@@ -14,7 +14,7 @@ from dotenv import load_dotenv
 
 # Setup logging
 logging.basicConfig(
-    filename="vector_output.log",
+    filename="debug.log",
     level=logging.INFO,
     format="%(asctime)s | %(levelname)s | %(message)s"
 )
@@ -86,14 +86,19 @@ class ChangeModel(BaseModel):
 
 @app.get("/activeembeddingmodell")
 async def activeembeddingmodell():
+    logging.info("/activeembeddingmodell | incoming")
     if PROVIDER == "openai":
-        return {"embedding_provider": "openai", "model_name": OPENAI_MODEL}
+        result = {"embedding_provider": "openai", "model_name": OPENAI_MODEL}
     elif PROVIDER == "openclip":
-        return {"embedding_provider": "openclip", "model_name": MODEL_NAME}
-    return {"error": "Invalid EMBEDDING_PROVIDER setting"}
+        result = {"embedding_provider": "openclip", "model_name": MODEL_NAME}
+    else:
+        result = {"error": "Invalid EMBEDDING_PROVIDER setting"}
+    logging.info(f"/activeembeddingmodell | result={json.dumps(result)}")
+    return result
 
 @app.post("/changeembeddingmodell")
 async def changeembeddingmodell(payload: ChangeModel):
+    logging.info(f"/changeembeddingmodell | incoming={payload.json()}")
     global PROVIDER, OPENAI_MODEL, MODEL_NAME, model, preprocess, tokenizer
     provider = payload.embedding_provider.lower()
     model_name = payload.model_name
@@ -106,7 +111,9 @@ async def changeembeddingmodell(payload: ChangeModel):
         model = None
         preprocess = None
         tokenizer = None
-        return {"embedding_provider": PROVIDER, "model_name": OPENAI_MODEL}
+        result = {"embedding_provider": PROVIDER, "model_name": OPENAI_MODEL}
+        logging.info(f"/changeembeddingmodell | result={json.dumps(result)}")
+        return result
 
     elif provider == "openclip":
         PROVIDER = "openclip"
@@ -117,25 +124,32 @@ async def changeembeddingmodell(payload: ChangeModel):
         model, _, preprocess = open_clip.create_model_and_transforms(MODEL_NAME, pretrained=PRETRAINED)
         tokenizer = open_clip.get_tokenizer(MODEL_NAME)
         model.eval()
-        return {"embedding_provider": PROVIDER, "model_name": MODEL_NAME}
+        result = {"embedding_provider": PROVIDER, "model_name": MODEL_NAME}
+        logging.info(f"/changeembeddingmodell | result={json.dumps(result)}")
+        return result
 
-    return {"error": "Invalid embedding_provider"}
+    result = {"error": "Invalid embedding_provider"}
+    logging.info(f"/changeembeddingmodell | result={json.dumps(result)}")
+    return result
 
 @app.get("/dimension")
 async def dimension():
+    logging.info("/dimension | incoming")
     if PROVIDER == "openclip":
-        logging.info(f"dimension | Provider=openai | dimension={json.dumps(DIMENSION_OPENCLIP)}")
-        return {"dimension": DIMENSION_OPENCLIP}
-
+        logging.info(f"dimension | Provider=openclip | dimension={json.dumps(DIMENSION_OPENCLIP)}")
+        result = {"dimension": DIMENSION_OPENCLIP}
     elif PROVIDER == "openai":
         logging.info(f"dimension | Provider=openai | dimension={json.dumps(DIMENSION_OPENAI)}")
-        return {"dimension": DIMENSION_OPENAI}
-
-    return {"error": "Invalid DIMENSION setting"}
+        result = {"dimension": DIMENSION_OPENAI}
+    else:
+        result = {"error": "Invalid DIMENSION setting"}
+    logging.info(f"/dimension | result={json.dumps(result)}")
+    return result
 
 
 @app.post("/text-embedding")
 async def text_embedding(payload: Texts):
+    logging.info(f"/text-embedding | incoming={payload.json()}")
     if PROVIDER == "openclip":
         tokens = tokenizer(payload.texts)
         with torch.no_grad():
@@ -143,7 +157,9 @@ async def text_embedding(payload: Texts):
             emb = emb / emb.norm(dim=-1, keepdim=True)
         vectors = emb.cpu().tolist()
         logging.info(f"TextEmbedding | Provider=openclip | VectorLength={len(vectors[0])} | Vectors={json.dumps(vectors)}")
-        return {"vectors": vectors}
+        result = {"vectors": vectors}
+        logging.info(f"/text-embedding | result={json.dumps(result)}")
+        return result
 
     elif PROVIDER == "openai":
         response = openai.embeddings.create(
@@ -152,13 +168,18 @@ async def text_embedding(payload: Texts):
         )
         vectors = [d.embedding for d in response.data]
         logging.info(f"TextEmbedding | Provider=openai | VectorLength={len(vectors[0])} | Vectors={json.dumps(vectors)}")
-        return {"vectors": vectors}
+        result = {"vectors": vectors}
+        logging.info(f"/text-embedding | result={json.dumps(result)}")
+        return result
 
-    return {"error": "Invalid EMBEDDING_PROVIDER setting"}
+    result = {"error": "Invalid EMBEDDING_PROVIDER setting"}
+    logging.info(f"/text-embedding | result={json.dumps(result)}")
+    return result
 
 
 @app.post("/image-embedding")
 async def image_embedding(file: UploadFile = File(...)):
+    logging.info(f"/image-embedding | incoming filename={file.filename}")
     data = await file.read()
 
     if PROVIDER == "openclip":
@@ -169,11 +190,13 @@ async def image_embedding(file: UploadFile = File(...)):
             emb = emb / emb.norm(dim=-1, keepdim=True)
         vector = emb.cpu().tolist()[0]
         logging.info(f"ImageEmbedding | Provider=openclip | VectorLength={len(vector)} | Vector={json.dumps(vector)}")
-        return {
-                        "description": "test",
-                        "vector": vector,
-                        "provider": "openclip"
-                    }
+        result = {
+            "description": "test",
+            "vector": vector,
+            "provider": "openclip"
+        }
+        logging.info(f"/image-embedding | result={json.dumps(result)}")
+        return result
 
     elif PROVIDER == "openai":
         base64_img = base64.b64encode(data).decode("utf-8")
@@ -200,21 +223,29 @@ async def image_embedding(file: UploadFile = File(...)):
             vector = embed_response.data[0].embedding
             logging.info(f"ImageEmbedding | Provider=openai | Description=\"{description}\" | VectorLength={len(vector)} | Vector={json.dumps(vector)}")
 
-            return {
+            result = {
                 "description": description,
                 "vector": vector,
                 "provider": "openai"
             }
+            logging.info(f"/image-embedding | result={json.dumps(result)}")
+            return result
 
         except Exception as e:
-            return {"error": f"OpenAI image description failed: {e}"}
-
-    return {"error": "Invalid EMBEDDING_PROVIDER setting"}
+            result = {"error": f"OpenAI image description failed: {e}"}
+            logging.info(f"/image-embedding | result={json.dumps(result)}")
+            return result
+    result = {"error": "Invalid EMBEDDING_PROVIDER setting"}
+    logging.info(f"/image-embedding | result={json.dumps(result)}")
+    return result
 
 
 @app.get("/healthstatus")
 async def healthstatus():
-    return {"status": "It works", "provider": PROVIDER}
+    logging.info("/healthstatus | incoming")
+    result = {"status": "It works", "provider": PROVIDER}
+    logging.info(f"/healthstatus | result={json.dumps(result)}")
+    return result
 
 
 if __name__ == "__main__":
