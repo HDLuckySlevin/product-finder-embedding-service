@@ -166,7 +166,6 @@ async def text_embedding(payload: Texts):
                 f"TextEmbedding | Provider=openclip | VectorLength={len(vectors[0])}"
             )
         result = {"vectors": vectors}
-        logging.info(f"/text-embedding | result={json.dumps(result)}")
         return result
 
     elif PROVIDER == "openai":
@@ -184,11 +183,9 @@ async def text_embedding(payload: Texts):
                 f"TextEmbedding | Provider=openai | VectorLength={len(vectors[0])}"
             )
         result = {"vectors": vectors}
-        logging.info(f"/text-embedding | result={json.dumps(result)}")
         return result
 
     result = {"error": "Invalid EMBEDDING_PROVIDER setting"}
-    logging.info(f"/text-embedding | result={json.dumps(result)}")
     return result
 
 
@@ -217,7 +214,6 @@ async def image_embedding(file: UploadFile = File(...)):
             "vector": vector,
             "provider": "openclip"
         }
-        logging.info(f"/image-embedding | result={json.dumps(result)}")
         return result
 
     elif PROVIDER == "openai":
@@ -257,7 +253,6 @@ async def image_embedding(file: UploadFile = File(...)):
                 "vector": vector,
                 "provider": "openai"
             }
-            logging.info(f"/image-embedding | result={json.dumps(result)}")
             return result
 
         except Exception as e:
