@@ -27,6 +27,8 @@ PROVIDER = os.getenv("EMBEDDING_PROVIDER", "openclip")
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "text-embedding-3-small")
 OPENAI_MODEL_IMAGE = os.getenv("OPENAI_MODEL_IMAGE", "gpt-4o")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+MODEL_NAME = os.getenv("MODEL_NAME", "ViT-L-14")  # ensure defined for all providers
+PRETRAINED = os.getenv("PRETRAINED")
 PROMPT = os.getenv("PROMPT", "Beschreibe präzise und sachlich ausschließlich das sichtbare Produkt auf dem Bild. Konzentriere dich auf Produktname, Farben, Materialien, sichtbare Strukturen, Formen und typische Nutzungshinweise. Wenn Text, Inhaltsstoffe, Logos, Marken oder Nummern wie EAN-Codes sichtbar sind, gib diese vollständig wieder. Vermeide jede Beschreibung von Personen, Körperteilen oder deren Interaktion mit dem Produkt. Nutze klare, maschinell interpretierbare Sprache in vollständigen Sätzen. Beschreibe den Hintergrund nur, wenn er für die Nutzung oder Erkennbarkeit des Produkts relevant ist. Nenne ausschließlich Merkmale, die im Bild eindeutig zu erkennen sind. Verzichte auf Interpretationen oder Bewertungen. Schreibe Am ende die Produkt-Kategorie dazu und den Produkt-Namen. Antworte auf deutsch")
 PORT = int(os.getenv("PORT", "1337"))
 DIMENSION_OPENCLIP = int(os.getenv("DIMENSION_OPENCLIP"))
@@ -40,11 +42,8 @@ tokenizer = None
 
 if PROVIDER == "openclip":
     import open_clip
-    MODEL_NAME = os.getenv("MODEL_NAME", "ViT-L-14")
-    PRETRAINED = os.getenv("PRETRAINED")
-
-    model, _, preprocess = open_clip.create_model_and_transforms(MODEL_NAME, pretrained=PRETRAINED)
-    tokenizer = open_clip.get_tokenizer(MODEL_NAME)
+    model, _, preprocess = open_clip.create_model_and_transforms(MODEL_NAME or "ViT-L-14", pretrained=PRETRAINED)
+    tokenizer = open_clip.get_tokenizer(MODEL_NAME or "ViT-L-14")
     model.eval()
 
 elif PROVIDER == "openai":
@@ -80,6 +79,47 @@ app = FastAPI(title="Embedding Service", lifespan=lifespan)
 
 class Texts(BaseModel):
     texts: List[str]
+
+class ChangeModel(BaseModel):
+    embedding_provider: str
+    model_name: str
+
+@app.get("/activeembeddingmodell")
+async def activeembeddingmodell():
+    if PROVIDER == "openai":
+        return {"embedding_provider": "openai", "model_name": OPENAI_MODEL}
+    elif PROVIDER == "openclip":
+        return {"embedding_provider": "openclip", "model_name": MODEL_NAME}
+    return {"error": "Invalid EMBEDDING_PROVIDER setting"}
+
+@app.post("/changeembeddingmodell")
+async def changeembeddingmodell(payload: ChangeModel):
+    global PROVIDER, OPENAI_MODEL, MODEL_NAME, model, preprocess, tokenizer
+    provider = payload.embedding_provider.lower()
+    model_name = payload.model_name
+
+    if provider == "openai":
+        PROVIDER = "openai"
+        OPENAI_MODEL = model_name
+        os.environ["EMBEDDING_PROVIDER"] = "openai"
+        os.environ["OPENAI_MODEL"] = model_name
+        model = None
+        preprocess = None
+        tokenizer = None
+        return {"embedding_provider": PROVIDER, "model_name": OPENAI_MODEL}
+
+    elif provider == "openclip":
+        PROVIDER = "openclip"
+        MODEL_NAME = model_name
+        os.environ["EMBEDDING_PROVIDER"] = "openclip"
+        os.environ["MODEL_NAME"] = model_name
+        import open_clip
+        model, _, preprocess = open_clip.create_model_and_transforms(MODEL_NAME, pretrained=PRETRAINED)
+        tokenizer = open_clip.get_tokenizer(MODEL_NAME)
+        model.eval()
+        return {"embedding_provider": PROVIDER, "model_name": MODEL_NAME}
+
+    return {"error": "Invalid embedding_provider"}
 
 @app.get("/dimension")
 async def dimension():
