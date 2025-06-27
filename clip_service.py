@@ -27,8 +27,10 @@ PROVIDER = os.getenv("EMBEDDING_PROVIDER", "openclip")
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "text-embedding-3-small")
 OPENAI_MODEL_IMAGE = os.getenv("OPENAI_MODEL_IMAGE", "gpt-4o")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-PROMPT = os.getenv("PROMPT", "Beschreibe präzise und sachlich ausschließlich das sichtbare Produkt auf dem Bild. Konzentriere dich auf Produktname, Farben, Materialien, sichtbare Strukturen, Formen und typische Nutzungshinweise. Wenn Text, Inhaltsstoffe, Logos, Marken oder Nummern wie EAN-Codes sichtbar sind, gib diese vollständig wieder. Vermeide jede Beschreibung von Personen, Körperteilen oder deren Interaktion mit dem Produkt. Nutze klare, maschinell interpretierbare Sprache in vollständigen Sätzen. Beschreibe den Hintergrund nur, wenn er für die Nutzung oder Erkennbarkeit des Produkts relevant ist. Nenne ausschließlich Merkmale, die im Bild eindeutig zu erkennen sind. Verzichte auf Interpretationen oder Bewertungen.")
+PROMPT = os.getenv("PROMPT", "Beschreibe präzise und sachlich ausschließlich das sichtbare Produkt auf dem Bild. Konzentriere dich auf Produktname, Farben, Materialien, sichtbare Strukturen, Formen und typische Nutzungshinweise. Wenn Text, Inhaltsstoffe, Logos, Marken oder Nummern wie EAN-Codes sichtbar sind, gib diese vollständig wieder. Vermeide jede Beschreibung von Personen, Körperteilen oder deren Interaktion mit dem Produkt. Nutze klare, maschinell interpretierbare Sprache in vollständigen Sätzen. Beschreibe den Hintergrund nur, wenn er für die Nutzung oder Erkennbarkeit des Produkts relevant ist. Nenne ausschließlich Merkmale, die im Bild eindeutig zu erkennen sind. Verzichte auf Interpretationen oder Bewertungen. Schreibe Am ende die Produkt-Kategorie dazu und den Produkt-Namen. Antworte auf deutsch")
 PORT = int(os.getenv("PORT", "1337"))
+DIMENSION_OPENCLIP = int(os.getenv("DIMENSION_OPENCLIP"))
+DIMENSION_OPENAI = int(os.getenv("DIMENSION_OPENAI"))
 
 print(f"🔧 Using embedding provider: {PROVIDER}")
 
@@ -79,6 +81,18 @@ app = FastAPI(title="Embedding Service", lifespan=lifespan)
 class Texts(BaseModel):
     texts: List[str]
 
+@app.get("/dimension")
+async def dimension():
+    if PROVIDER == "openclip":
+        logging.info(f"dimension | Provider=openai | dimension={json.dumps(DIMENSION_OPENCLIP)}")
+        return {"dimension": DIMENSION_OPENCLIP}
+
+    elif PROVIDER == "openai":
+        logging.info(f"dimension | Provider=openai | dimension={json.dumps(DIMENSION_OPENAI)}")
+        return {"dimension": DIMENSION_OPENAI}
+
+    return {"error": "Invalid DIMENSION setting"}
+
 
 @app.post("/text-embedding")
 async def text_embedding(payload: Texts):
@@ -115,7 +129,11 @@ async def image_embedding(file: UploadFile = File(...)):
             emb = emb / emb.norm(dim=-1, keepdim=True)
         vector = emb.cpu().tolist()[0]
         logging.info(f"ImageEmbedding | Provider=openclip | VectorLength={len(vector)} | Vector={json.dumps(vector)}")
-        return {"vector": vector}
+        return {
+                        "description": "test",
+                        "vector": vector,
+                        "provider": "openclip"
+                    }
 
     elif PROVIDER == "openai":
         base64_img = base64.b64encode(data).decode("utf-8")
@@ -126,7 +144,7 @@ async def image_embedding(file: UploadFile = File(...)):
                     {
                         "role": "user",
                         "content": [
-                            {"type": "text", "text": PROMPT},
+                            {"type": "text", "text": "Beschreibe ausschließlich das sichtbare physische Produkt auf dem Bild sachlich und vollständig. Gib alle sichtbaren Merkmale wie Produktform, Farbe, Kameraanordnung, Materialien, Knöpfe, Logos und sichtbare Inhalte auf dem Display an. Wenn ein Logo sichtbar ist, nenne die zugehörige Marke, sofern sie durch Form, Farbe oder Gestaltung eindeutig erkennbar ist. Verwende keine unsicheren Begriffe wie „möglicherweise“ oder „könnte“. Nutze die Markenzuordnung nur, wenn diese auf dem Bild visuell eindeutig ist, z. B. bei einem „G“-Logo für Google oder einem Apfel-Logo für Apple.Beschreibe den Bildschirminhalt nur, wenn er sichtbar ist. Verwende klare, einfache Sätze.Beende die Beschreibung mit den Feldern: Produkt-Kategorie: [z. B. Smartphone] Produkt-Name: [Marke + Modell, falls eindeutig sichtbar, sonst: „nicht erkennbar“]"},
                             {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{base64_img}", "detail": "high"}}
                         ]
                     }
@@ -144,7 +162,8 @@ async def image_embedding(file: UploadFile = File(...)):
 
             return {
                 "description": description,
-                "vector": vector
+                "vector": vector,
+                "provider": "openai"
             }
 
         except Exception as e:
