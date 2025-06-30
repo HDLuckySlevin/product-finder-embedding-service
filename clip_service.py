@@ -24,7 +24,7 @@ logging.basicConfig(
 load_dotenv()
 
 # ENV
-PROVIDER = os.getenv("EMBEDDING_PROVIDER", "openclip")
+PROVIDER = os.getenv("EMBEDDING_PROVIDER", "openai")
 OPENAI_MODEL_IMAGE = os.getenv("OPENAI_MODEL_IMAGE", "gpt-4o")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 MODEL_NAME_RAW = os.getenv("MODEL_NAME", "")
@@ -123,8 +123,8 @@ class ChangeModel(BaseModel):
 
 @app.get("/availablemodels")
 async def availablemodels():
-    logging.info(f"/availablemodels | incoming")
-    logging.info(f"/availablemodels | result={json.dumps(AVAILABLE_MODELS)}")
+    logging.info("/availablemodels | incoming")
+    logging.info("/availablemodels | result={json.dumps(AVAILABLE_MODELS)}")
     return AVAILABLE_MODELS
 
 @app.get("/activeembeddingmodell")
