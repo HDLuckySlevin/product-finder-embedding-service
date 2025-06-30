@@ -37,18 +37,21 @@ PORT = int(os.getenv("PORT", "1337"))
 # {openclip{ViT-L-14(768)},openai{text-embedding-3-large(3072),text-embedding-ada-002(1536)}}
 
 def parse_models_env(env_str: str) -> Dict[str, Dict[str, int]]:
-    models: Dict[str, Dict[str, int]] = {}
+    models = {}
     if not env_str:
         return models
-    env_str = env_str.strip("{} ")
-    for provider, models_str in re.findall(r"(\w+)\{([^{}]*)\}", env_str):
+
+    # Beispiel: {openclip{ViT-L-14(768)},openai{text-embedding-3-large(3072),text-embedding-ada-002(1536)}}
+    provider_blocks = re.findall(r"(\w+)\{([^{}]+)\}", env_str)
+
+    for provider, content in provider_blocks:
         models[provider] = {}
-        for item in [m.strip() for m in models_str.split(',') if m.strip()]:
-            m = re.match(r"([^()]+)\((\d+)\)", item)
-            if m:
-                name, dim = m.groups()
-                models[provider][name] = int(dim)
+        model_entries = re.findall(r"([^(),]+)\((\d+)\)", content)
+        for model_name, dim in model_entries:
+            models[provider][model_name.strip()] = int(dim)
+
     return models
+
 
 AVAILABLE_MODELS = parse_models_env(MODEL_NAME_RAW)
 
@@ -120,7 +123,7 @@ class ChangeModel(BaseModel):
 
 @app.get("/availablemodels")
 async def availablemodels():
-    logging.info("/availablemodels | incoming")
+    logging.info(f"/availablemodels | incoming")
     logging.info(f"/availablemodels | result={json.dumps(AVAILABLE_MODELS)}")
     return AVAILABLE_MODELS
 
@@ -129,11 +132,13 @@ async def activeembeddingmodell():
     logging.info("/activeembeddingmodell | incoming")
     if PROVIDER == "openai":
         result = {"embedding_provider": "openai", "model_name": OPENAI_MODEL}
+        logging.info(f"/activeembeddingmodell OPENAI | result={json.dumps(result)}")
     elif PROVIDER == "openclip":
         result = {"embedding_provider": "openclip", "model_name": MODEL_NAME}
+        logging.info(f"/activeembeddingmodell OPENCLIP | result={json.dumps(result)}")
     else:
         result = {"error": "Invalid EMBEDDING_PROVIDER setting"}
-    logging.info(f"/activeembeddingmodell | result={json.dumps(result)}")
+
     return result
 
 @app.post("/changeembeddingmodell")
