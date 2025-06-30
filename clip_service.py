@@ -3,10 +3,11 @@ import io
 import base64
 import json
 import logging
+import re
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, File, UploadFile
 from pydantic import BaseModel
-from typing import List
+from typing import List, Dict
 from PIL import Image
 import torch
 import openai
@@ -23,17 +24,43 @@ logging.basicConfig(
 load_dotenv()
 
 # ENV
-PROVIDER = os.getenv("EMBEDDING_PROVIDER", "openclip")
-OPENAI_MODEL = os.getenv("OPENAI_MODEL", "text-embedding-3-small")
+PROVIDER = os.getenv("EMBEDDING_PROVIDER", "openai")
 OPENAI_MODEL_IMAGE = os.getenv("OPENAI_MODEL_IMAGE", "gpt-4o")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-MODEL_NAME = os.getenv("MODEL_NAME", "ViT-L-14")  # ensure defined for all providers
+MODEL_NAME_RAW = os.getenv("MODEL_NAME", "")
 PRETRAINED = os.getenv("PRETRAINED")
 DEBUG_VECTORS = os.getenv("DEBUG_VECTORS", "false").lower() == "true"
 PROMPT = os.getenv("PROMPT", "Beschreibe präzise und sachlich ausschließlich das sichtbare Produkt auf dem Bild. Konzentriere dich auf Produktname, Farben, Materialien, sichtbare Strukturen, Formen und typische Nutzungshinweise. Wenn Text, Inhaltsstoffe, Logos, Marken oder Nummern wie EAN-Codes sichtbar sind, gib diese vollständig wieder. Vermeide jede Beschreibung von Personen, Körperteilen oder deren Interaktion mit dem Produkt. Nutze klare, maschinell interpretierbare Sprache in vollständigen Sätzen. Beschreibe den Hintergrund nur, wenn er für die Nutzung oder Erkennbarkeit des Produkts relevant ist. Nenne ausschließlich Merkmale, die im Bild eindeutig zu erkennen sind. Verzichte auf Interpretationen oder Bewertungen. Schreibe Am ende die Produkt-Kategorie dazu und den Produkt-Namen. Antworte auf deutsch")
 PORT = int(os.getenv("PORT", "1337"))
-DIMENSION_OPENCLIP = int(os.getenv("DIMENSION_OPENCLIP"))
-DIMENSION_OPENAI = int(os.getenv("DIMENSION_OPENAI"))
+
+# Parse MODEL_NAME env value of form
+# {openclip{ViT-L-14(768)},openai{text-embedding-3-large(3072),text-embedding-ada-002(1536)}}
+
+def parse_models_env(env_str: str) -> Dict[str, Dict[str, int]]:
+    models = {}
+    if not env_str:
+        return models
+
+    # Beispiel: {openclip{ViT-L-14(768)},openai{text-embedding-3-large(3072),text-embedding-ada-002(1536)}}
+    provider_blocks = re.findall(r"(\w+)\{([^{}]+)\}", env_str)
+
+    for provider, content in provider_blocks:
+        models[provider] = {}
+        model_entries = re.findall(r"([^(),]+)\((\d+)\)", content)
+        for model_name, dim in model_entries:
+            models[provider][model_name.strip()] = int(dim)
+
+    return models
+
+
+AVAILABLE_MODELS = parse_models_env(MODEL_NAME_RAW)
+
+if PROVIDER not in AVAILABLE_MODELS:
+    # fall back to first available provider
+    PROVIDER = next(iter(AVAILABLE_MODELS.keys()), PROVIDER)
+
+MODEL_NAME = next(iter(AVAILABLE_MODELS.get(PROVIDER, {})), None)
+OPENAI_MODEL = MODEL_NAME if PROVIDER == "openai" else None
 
 print(f"🔧 Using embedding provider: {PROVIDER}")
 
@@ -41,19 +68,19 @@ model = None
 preprocess = None
 tokenizer = None
 
-if PROVIDER == "openclip":
+if PROVIDER == "openclip" and MODEL_NAME:
     import open_clip
     pretrained_weights = PRETRAINED
-    if (MODEL_NAME or "ViT-L-14") == "ViT-L-14":
+    if MODEL_NAME == "ViT-L-14":
         if not pretrained_weights:
             pretrained_weights = "openai"
         logging.info(
             f"Loading ViT-L-14 with pretrained weights '{pretrained_weights}'"
         )
     model, _, preprocess = open_clip.create_model_and_transforms(
-        MODEL_NAME or "ViT-L-14", pretrained=pretrained_weights
+        MODEL_NAME, pretrained=pretrained_weights
     )
-    tokenizer = open_clip.get_tokenizer(MODEL_NAME or "ViT-L-14")
+    tokenizer = open_clip.get_tokenizer(MODEL_NAME)
     model.eval()
 
 elif PROVIDER == "openai":
@@ -94,16 +121,24 @@ class ChangeModel(BaseModel):
     embedding_provider: str
     model_name: str
 
+@app.get("/availablemodels")
+async def availablemodels():
+    logging.info("/availablemodels | incoming")
+    logging.info("/availablemodels | result={json.dumps(AVAILABLE_MODELS)}")
+    return AVAILABLE_MODELS
+
 @app.get("/activeembeddingmodell")
 async def activeembeddingmodell():
     logging.info("/activeembeddingmodell | incoming")
     if PROVIDER == "openai":
         result = {"embedding_provider": "openai", "model_name": OPENAI_MODEL}
+        logging.info(f"/activeembeddingmodell OPENAI | result={json.dumps(result)}")
     elif PROVIDER == "openclip":
         result = {"embedding_provider": "openclip", "model_name": MODEL_NAME}
+        logging.info(f"/activeembeddingmodell OPENCLIP | result={json.dumps(result)}")
     else:
         result = {"error": "Invalid EMBEDDING_PROVIDER setting"}
-    logging.info(f"/activeembeddingmodell | result={json.dumps(result)}")
+
     return result
 
 @app.post("/changeembeddingmodell")
@@ -113,23 +148,20 @@ async def changeembeddingmodell(payload: ChangeModel):
     provider = payload.embedding_provider.lower()
     model_name = payload.model_name
 
-    if provider == "openai":
-        PROVIDER = "openai"
-        OPENAI_MODEL = model_name
-        os.environ["EMBEDDING_PROVIDER"] = "openai"
-        os.environ["OPENAI_MODEL"] = model_name
-        model = None
-        preprocess = None
-        tokenizer = None
-        result = {"embedding_provider": PROVIDER, "model_name": OPENAI_MODEL}
+    if provider not in AVAILABLE_MODELS or model_name not in AVAILABLE_MODELS[provider]:
+        result = {"error": "Invalid embedding_provider or model_name"}
         logging.info(f"/changeembeddingmodell | result={json.dumps(result)}")
         return result
 
-    elif provider == "openclip":
-        PROVIDER = "openclip"
-        MODEL_NAME = model_name
-        os.environ["EMBEDDING_PROVIDER"] = "openclip"
-        os.environ["MODEL_NAME"] = model_name
+    PROVIDER = provider
+    MODEL_NAME = model_name
+    OPENAI_MODEL = MODEL_NAME if PROVIDER == "openai" else OPENAI_MODEL
+
+    if PROVIDER == "openai":
+        model = None
+        preprocess = None
+        tokenizer = None
+    elif PROVIDER == "openclip":
         import open_clip
         pretrained_weights = PRETRAINED
         if MODEL_NAME == "ViT-L-14":
@@ -143,24 +175,21 @@ async def changeembeddingmodell(payload: ChangeModel):
         )
         tokenizer = open_clip.get_tokenizer(MODEL_NAME)
         model.eval()
-        result = {"embedding_provider": PROVIDER, "model_name": MODEL_NAME}
-        logging.info(f"/changeembeddingmodell | result={json.dumps(result)}")
-        return result
 
-    result = {"error": "Invalid embedding_provider"}
+    result = {"embedding_provider": PROVIDER, "model_name": MODEL_NAME}
     logging.info(f"/changeembeddingmodell | result={json.dumps(result)}")
     return result
 
 @app.get("/dimension")
 async def dimension():
     logging.info("/dimension | incoming")
-    if PROVIDER == "openclip":
-        logging.info(f"dimension | Provider=openclip | dimension={json.dumps(DIMENSION_OPENCLIP)}")
-        result = {"dimension": DIMENSION_OPENCLIP}
-    elif PROVIDER == "openai":
-        logging.info(f"dimension | Provider=openai | dimension={json.dumps(DIMENSION_OPENAI)}")
-        result = {"dimension": DIMENSION_OPENAI}
-    else:
+    try:
+        dim = AVAILABLE_MODELS[PROVIDER][MODEL_NAME]
+        logging.info(
+            f"dimension | Provider={PROVIDER} | Model={MODEL_NAME} | dimension={dim}"
+        )
+        result = {"dimension": dim}
+    except KeyError:
         result = {"error": "Invalid DIMENSION setting"}
     logging.info(f"/dimension | result={json.dumps(result)}")
     return result
