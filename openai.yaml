@@ -1,0 +1,116 @@
+openapi: 3.0.3
+info:
+    title: OpenAI Embedding API
+    version: 1.0.0
+    description: REST API für Text- und Bild-Embeddings mit OpenAI
+servers:
+    - url: http://localhost:1337
+
+paths:
+    /text-embedding:
+        post:
+            summary: Text-Embedding erzeugen
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            type: object
+                            required:
+                                - texts
+                            properties:
+                                texts:
+                                    type: array
+                                    items:
+                                        type: string
+                                    example: ["Dies ist ein Beispieltext"]
+            responses:
+                '200':
+                    description: Erfolgreiche Vektorantwort
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    vectors:
+                                        type: array
+                                        items:
+                                            type: array
+                                            items:
+                                                type: number
+
+    /image-embedding:
+        post:
+            summary: Bildbeschreibung und -Embedding erzeugen
+            requestBody:
+                required: true
+                content:
+                    multipart/form-data:
+                        schema:
+                            type: object
+                            properties:
+                                file:
+                                    type: string
+                                    format: binary
+            responses:
+                '200':
+                    description: Erfolgreiche Beschreibung und Vektor
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    description:
+                                        type: string
+                                    vector:
+                                        type: array
+                                        items:
+                                            type: number
+                                    provider:
+                                        type: string
+
+    /activeembeddingmodell:
+        get:
+            summary: Aktuelles Modell abfragen
+            responses:
+                '200':
+                    description: Modellname
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    embedding_provider:
+                                        type: string
+                                    model_name:
+                                        type: string
+
+    /dimension:
+        get:
+            summary: Embedding-Dimension des aktuellen Modells
+            responses:
+                '200':
+                    description: Dimension
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    dimension:
+                                        type: integer
+
+    /healthstatus:
+        get:
+            summary: Gesundheitsstatus des Services
+            responses:
+                '200':
+                    description: Status
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    status:
+                                        type: string
+                                    provider:
+                                        type: string

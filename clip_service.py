@@ -218,7 +218,8 @@ async def text_embedding(payload: Texts):
     elif PROVIDER == "openai":
         response = openai.embeddings.create(
             input=payload.texts,
-            model=OPENAI_MODEL
+            model=OPENAI_MODEL,
+            extra_body={"embedding_types": ["mean"]}
         )
         vectors = [d.embedding for d in response.data]
         if DEBUG_VECTORS:
@@ -283,7 +284,8 @@ async def image_embedding(file: UploadFile = File(...)):
 
             embed_response = openai.embeddings.create(
                 input=[description],
-                model=OPENAI_MODEL
+                model=OPENAI_MODEL,
+                extra_body={"embedding_types": ["mean"]}
             )
             vector = embed_response.data[0].embedding
             if DEBUG_VECTORS:
@@ -313,9 +315,7 @@ async def image_embedding(file: UploadFile = File(...)):
 
 @app.get("/healthstatus")
 async def healthstatus():
-    logging.info("/healthstatus | incoming")
     result = {"status": "It works", "provider": PROVIDER}
-    logging.info(f"/healthstatus | result={json.dumps(result)}")
     return result
 
 

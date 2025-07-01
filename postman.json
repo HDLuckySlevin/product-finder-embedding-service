@@ -1,0 +1,94 @@
+{
+  "info": {
+    "name": "OpenAI Embedding API",
+    "_postman_id": "a-uuid-example",
+    "description": "API zur Generierung von Text- und Bild-Embeddings via OpenAI",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Text Embedding",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"texts\": [\"Beispieltext\"]\n}"
+        },
+        "url": {
+          "raw": "http://localhost:1337/text-embedding",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "1337",
+          "path": ["text-embedding"]
+        }
+      }
+    },
+    {
+      "name": "Image Embedding",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "formdata",
+          "formdata": [
+            {
+              "key": "file",
+              "type": "file",
+              "src": "/Pfad/zum/Bild.jpg"
+            }
+          ]
+        },
+        "url": {
+          "raw": "http://localhost:1337/image-embedding",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "1337",
+          "path": ["image-embedding"]
+        }
+      }
+    },
+    {
+      "name": "Active Embedding Model",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "http://localhost:1337/activeembeddingmodell",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "1337",
+          "path": ["activeembeddingmodell"]
+        }
+      }
+    },
+    {
+      "name": "Get Dimension",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "http://localhost:1337/dimension",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "1337",
+          "path": ["dimension"]
+        }
+      }
+    },
+    {
+      "name": "Health Status",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "http://localhost:1337/healthstatus",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "1337",
+          "path": ["healthstatus"]
+        }
+      }
+    }
+  ]
+}
